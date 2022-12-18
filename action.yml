@@ -1,0 +1,127 @@
+name: 'ZyAction: Update Semver'
+
+description: A GitHub Action to update floating version tag aliases.
+author: Florian Bernd
+
+branding:
+  icon: arrow-up-circle
+  color: red
+
+inputs:
+  tag:
+    description: >
+      The name of the target tag or the reference to be used to update the other tags.
+
+      Defaults to `GITHUB_REF` if not specified.
+    type: string
+    required: false
+    default: ''
+  prefix:
+    description: >
+      An optional version prefix like e.g. `v` or `release-v`. Defaults to `v`.
+    type: string
+    required: false
+    default: 'v'
+  update-minor:
+    description: >
+      Enable this option to also update minor version tags. Defaults to `false`.
+    type: boolean
+    required: false
+    default: false
+  ignore-prerelease:
+    description: >
+      Enable this option to ignore prerelease versions. Defaults to `true`.
+    type: boolean
+    required: false
+    default: true
+
+runs:
+  using: composite
+  steps:
+    - name: Extract Target Version
+      id: semver
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_PREFIX: ${{ inputs.prefix }}
+      run: |
+        version=$INPUT_TAG
+        if [[ -z "$version" ]]; then
+            version=$GITHUB_REF
+        fi
+
+        version="${version#refs/}"
+        version="${version#tags/}"
+        version="${version#$INPUT_PREFIX}"
+
+        status=$(semver-tool/semver.sh validate $version)
+        if [[ "$status" != "valid" ]]; then
+            echo ::error ::Version $version does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'
+            exit 1
+        fi
+
+        major=$(semver-tool/semver.sh get major $version)
+        minor=$(semver-tool/semver.sh get minor $version)
+        prerelease=$(semver-tool/semver.sh get prerelease $version)
+
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "major=$major" >> $GITHUB_OUTPUT
+        echo "minor=$minor" >> $GITHUB_OUTPUT
+        echo "prerelease=$prerelease" >> $GITHUB_OUTPUT
+
+    - name: Update Version Tags
+      if: inputs.ignore-prerelease == 'false' || steps.semver.outputs.prerelease == ''
+      uses: actions/github-script@v6
+      with:
+        script: |
+          async function createOrUpdateTag(name, sha) {
+            try {
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${name}`,
+                sha: sha,
+                force: true
+              });
+            } catch (error) {
+              // API returns '422: Reference does not exist' if the target reference does not exists
+              if (error.status != 422) {
+                throw(error);
+              }
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/tags/${name}`,
+                sha: sha
+              });
+            }
+          }
+
+          try {
+            const targetName = 'tags/${{ inputs.prefix }}${{ steps.semver.outputs.version }}';
+            const target = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo, 
+              ref: targetName
+            });
+
+            const targetHash = target.data.object.sha;
+
+            console.log(`Target reference: '${targetName}' (${targetHash})`);
+
+            const nameMajor = '${{ inputs.prefix }}${{ steps.semver.outputs.major }}';
+            await createOrUpdateTag(nameMajor, targetHash);
+
+            console.log(`Updated major version tag '${nameMajor}'`);
+
+            if (!${{ inputs.update-minor }}) {
+              return;
+            }
+
+            const nameMinor = '${{ inputs.prefix }}${{ steps.semver.outputs.major }}.${{ steps.semver.outputs.minor }}';
+            await createOrUpdateTag(nameMinor, targetHash);
+
+            console.log(`Updated minor version tag '${nameMinor}'`);
+          } catch (error) {
+            core.setFailed(error.message);
+          }
