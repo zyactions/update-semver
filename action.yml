@@ -45,20 +45,24 @@ runs:
         INPUT_TAG: ${{ inputs.tag }}
         INPUT_PREFIX: ${{ inputs.prefix }}
       run: |
-        version=$INPUT_TAG
+        version="$INPUT_TAG"
         if [[ -z "$version" ]]; then
-            version=$GITHUB_REF
+            version="$GITHUB_REF"
         fi
+
+        echo "Target tag name or reference: '$version'"
 
         version="${version#refs/}"
         version="${version#tags/}"
         version="${version#$INPUT_PREFIX}"
 
+        echo "Target version: '$version'"
+
         semvertool="$GITHUB_ACTION_PATH/semver-tool/semver.sh"
 
         status=$("$semvertool" validate "$version")
         if [[ "$status" != "valid" ]]; then
-            echo ::error ::Version $version does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'
+            echo "::error ::Version '$version' does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'"
             exit 1
         fi
 

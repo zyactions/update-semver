@@ -20,6 +20,7 @@ jobs:
       matrix:
         platform: [ubuntu-latest, macos-latest, windows-latest]
     env:
+      PREFIX: 'ci-v'
       TEST_TAG: 'ci-v1.2.3'
       TEST_TAG_PREREL: 'ci-v2.3.4-prerelease'
       TAG_MAJOR: 'ci-v1'
@@ -46,21 +47,21 @@ jobs:
       - name: 'TEST: Update Major'
         uses: ./.
         with:
-          tag: ${{ env.TEST_TAG }}
-          prefix: 'ci-v'
+          tag: "refs/tags/${{ env.TEST_TAG }}"
+          prefix: ${{ env.PREFIX }}
 
       - name: 'TEST: Update Minor'
         uses: ./.
         with:
-          tag: ${{ env.TEST_TAG }}
-          prefix: 'ci-v'
+          tag: "refs/tags/${{ env.TEST_TAG }}"
+          prefix: ${{ env.PREFIX }}
           update-minor: true
 
       - name: 'TEST: Ignore Prerelease'
         uses: ./.
         with:
-          tag: ${{ env.TEST_TAG_PREREL }}
-          prefix: 'ci-v'
+          tag: "refs/tags/${{ env.TEST_TAG_PREREL }}"
+          prefix: ${{ env.PREFIX }}
 
       - name: Cleanup
         if: always()
