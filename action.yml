@@ -56,15 +56,15 @@ runs:
 
         semvertool="$GITHUB_ACTION_PATH/semver-tool/semver.sh"
 
-        status=$($semvertool validate $version)
+        status=$("$semvertool" validate "$version")
         if [[ "$status" != "valid" ]]; then
             echo ::error ::Version $version does not match the semver scheme 'X.Y.Z(-PRERELEASE)(+BUILD)'
             exit 1
         fi
 
-        major=$($semvertool get major $version)
-        minor=$($semvertool get minor $version)
-        prerelease=$($semvertool get prerelease $version)
+        major=$("$semvertool" get major "$version")
+        minor=$("$semvertool" get minor "$version")
+        prerelease=$("$semvertool" get prerelease "$version")
 
         echo "version=$version" >> $GITHUB_OUTPUT
         echo "major=$major" >> $GITHUB_OUTPUT
